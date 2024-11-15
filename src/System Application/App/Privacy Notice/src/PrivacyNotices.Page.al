@@ -164,8 +164,8 @@ page 1565 "Privacy Notices"
 
     trigger OnAfterGetRecord()
     begin
-        Accepted := Rec.ApprovedByDefault or Rec.Enabled;
-        Rejected := not Rec.ApprovedByDefault and Rec.Disabled;
+        Accepted := (Rec.ApprovedByDefault or Rec.Enabled);
+        Rejected := (not Rec.ApprovedByDefault and Rec.Disabled);
         UserDecides := not Rec.ApprovedByDefault and not (Accepted or Rejected);
     end;
 

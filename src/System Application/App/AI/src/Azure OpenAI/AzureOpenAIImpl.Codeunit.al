@@ -116,14 +116,6 @@ codeunit 7772 "Azure OpenAI Impl"
         exit(true);
     end;
 
-    local procedure OnDisagreed(Silent: Boolean; CopilotNotAvailable: Page "Copilot Not Available"; Capability: Enum "Copilot Capability")
-    begin
-        if not Silent then begin
-            CopilotNotAvailable.SetCopilotCapability(Capability);
-            CopilotNotAvailable.Run();
-        end;
-    end;
-
     local procedure CheckPrivacyNoticeState(Silent: Boolean; Capability: Enum "Copilot Capability"): Boolean
     var
         PrivacyNotice: Codeunit "Privacy Notice";
@@ -132,12 +124,11 @@ codeunit 7772 "Azure OpenAI Impl"
         case PrivacyNotice.GetPrivacyNoticeApprovalState(CopilotCapabilityImpl.GetAzureOpenAICategory(), false) of
             Enum::"Privacy Notice Approval State"::Agreed:
                 exit(true);
-            Enum::"Privacy Notice Approval State"::Disagreed:
-                OnDisagreed(Silent, CopilotNotAvailable, Capability);
-
-                exit(false);
-            Enum::"Privacy Notice Approval State"::DisagreedAdmin:
-                OnDisagreed(Silent, CopilotNotAvailable, Capability);
+            Enum::"Privacy Notice Approval State"::Disagreed, Enum::"Privacy Notice Approval State"::DisagreedAdmin:
+                if not Silent then begin
+                    CopilotNotAvailable.SetCopilotCapability(Capability);
+                    CopilotNotAvailable.Run();
+                end;
 
                 exit(false);
             else

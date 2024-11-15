@@ -190,7 +190,7 @@ codeunit 1565 "Privacy Notice Impl."
             end;
             PrivacyNoticeApproval.SetApprovalState(PrivacyNoticeId, this.EmptyGuid, PrivacyNoticeApprovalState);
         end else begin
-            if not PrivacyNotice.IsApprovalStateDisagreed(PrivacyNoticeApprovalState) then begin // We do not store rejected user approvals
+            if not IsApprovalStateDisagreed(PrivacyNoticeApprovalState) then begin // We do not store rejected user approvals
                 PrivacyNoticeApproval.SetApprovalState(PrivacyNoticeId, UserSecurityId(), PrivacyNoticeApprovalState);
             end;
         end;
@@ -317,6 +317,29 @@ codeunit 1565 "Privacy Notice Impl."
 
         Session.LogMessage('0000GP9', SystemEventPrivacyNoticeNotCreatedTelemetryErr, Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', TelemetryCategoryTxt);
         IsApproved := false;
+    end;
+
+    /// <summary>
+    /// Determines whether the admin or user has disagreed with the Privacy Notice.
+    /// </summary>
+    /// <param name="Id">Identification of an existing privacy notice.</param>
+    /// <returns>Whether the Privacy Notice was disagreed to.</returns>
+    procedure IsApprovalStateDisagreed(Id: Code[50]): Boolean
+    var
+        State: Enum "Privacy Notice Approval State";
+    begin
+        State := CheckPrivacyNoticeApprovalState(Id);
+        exit(IsApprovalStateDisagreed(State));
+    end;
+
+    /// <summary>
+    /// Determines whether the admin or user has disagreed with the Privacy Notice.
+    /// </summary>
+    /// <param name="State">The approval state.</param>
+    /// <returns>Whether the Privacy Notice was disagreed to.</returns>
+    procedure IsApprovalStateDisagreed(State: Enum "Privacy Notice Approval State"): Boolean
+    begin
+        exit((State = "Privacy Notice Approval State"::Disagreed) or (State = "Privacy Notice Approval State"::DisagreedAdmin));
     end;
 
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"System Action Triggers", GetPrivacyNoticeApprovalState, '', true, true)]

@@ -165,10 +165,8 @@ codeunit 1563 "Privacy Notice"
     procedure IsApprovalStateDisagreed(Id: Code[50]): Boolean
     var
         PrivacyNoticeImpl: Codeunit "Privacy Notice Impl.";
-        State: Enum "Privacy Notice Approval State";
     begin
-        State := PrivacyNoticeImpl.CheckPrivacyNoticeApprovalState(Id);
-        exit(IsApprovalStateDisagreed(State));
+        exit(PrivacyNoticeImpl.IsApprovalStateDisagreed(Id));
     end;
 
     /// <summary>
@@ -177,8 +175,10 @@ codeunit 1563 "Privacy Notice"
     /// <param name="State">The approval state.</param>
     /// <returns>Whether the Privacy Notice was disagreed to.</returns>
     procedure IsApprovalStateDisagreed(State: Enum "Privacy Notice Approval State"): Boolean
+    var
+        PrivacyNoticeImpl: Codeunit "Privacy Notice Impl.";
     begin
-        exit((State = "Privacy Notice Approval State"::Disagreed) or (State = "Privacy Notice Approval State"::DisagreedAdmin));
+        exit(PrivacyNoticeImpl.IsApprovalStateDisagreed(State));
     end;
 
     /// <summary>
