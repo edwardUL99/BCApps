@@ -31,6 +31,7 @@ codeunit 1565 "Privacy Notice Impl."
         ShowingPrivacyNoticeTelemetryTxt: Label 'Showing privacy notice', Locked = true;
         PrivacyNoticeApprovalResultTelemetryTxt: Label 'Approval State after showing privacy notice: %1', Locked = true;
         CheckPrivacyNoticeApprovalStateTelemetryTxt: Label 'Checking privacy approval state', Locked = true;
+        PrivacyNoticeApprovedByDefaultTxt: Label 'The privacy notice was approved by default', Locked = true;
         AdminPrivacyApprovalStateTelemetryTxt: Label 'Admin privacy approval state: %1', Locked = true;
         UserPrivacyApprovalStateTelemetryTxt: Label 'User privacy approval state: %1', Locked = true;
         RegisteringPrivacyNoticesFailedTelemetryErr: Label 'Privacy notices could not be registered', Locked = true;
@@ -47,7 +48,12 @@ codeunit 1565 "Privacy Notice Impl."
     var
         PrivacyNotice: Record "Privacy Notice";
     begin
-        exit(CreatePrivacyNotice(PrivacyNotice, Id, IntegrationName, Link));
+        if this.CreatePrivacyNotice(PrivacyNotice, Id, IntegrationName, Link) then begin
+            PrivacyNotice.ApprovedByDefault := true;
+            exit(PrivacyNotice.Modify());
+        end;
+
+        exit(false);
     end;
 
     procedure CreatePrivacyNotice(Id: Code[50]; IntegrationName: Text[250]): Boolean
@@ -135,14 +141,19 @@ codeunit 1565 "Privacy Notice Impl."
             exit("Privacy Notice Approval State"::"Not set"); // If there are no Privacy Notice then it is by default "Not set".
         end;
 
+        if PrivacyNotice.ApprovedByDefault then begin
+            Session.LogMessage('0000GKD', this.PrivacyNoticeApprovedByDefaultTxt, Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', this.TelemetryCategoryTxt);
+            exit("Privacy Notice Approval State"::Agreed);
+        end;
+
         // First check if admin has made decision on this privacy notice and return that
         if PrivacyNotice.Enabled then begin
             Session.LogMessage('0000GKD', StrSubstNo(AdminPrivacyApprovalStateTelemetryTxt, "Privacy Notice Approval State"::Agreed), Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', TelemetryCategoryTxt);
             exit("Privacy Notice Approval State"::Agreed);
         end;
         if PrivacyNotice.Disabled then begin
-            Session.LogMessage('0000GKE', StrSubstNo(AdminPrivacyApprovalStateTelemetryTxt, "Privacy Notice Approval State"::Disagreed), Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', TelemetryCategoryTxt);
-            exit("Privacy Notice Approval State"::Disagreed);
+            Session.LogMessage('0000GKE', StrSubstNo(this.AdminPrivacyApprovalStateTelemetryTxt, "Privacy Notice Approval State"::DisagreedAdmin), Verbosity::Normal, DataClassification::SystemMetadata, TelemetryScope::ExtensionPublisher, 'Category', this.TelemetryCategoryTxt);
+            exit("Privacy Notice Approval State"::DisagreedAdmin);
         end;
 
         // Admin did not make any decision
@@ -171,13 +182,18 @@ codeunit 1565 "Privacy Notice Impl."
     procedure SetApprovalState(PrivacyNoticeId: Code[50]; PrivacyNoticeApprovalState: Enum "Privacy Notice Approval State")
     var
         PrivacyNoticeApproval: Codeunit "Privacy Notice Approval";
+        PrivacyNotice: Codeunit "Privacy Notice";
     begin
-        CreateDefaultPrivacyNotices(); // Ensure all default Privacy Notices are created
-        if CanCurrentUserApproveForOrganization() then
-            PrivacyNoticeApproval.SetApprovalState(PrivacyNoticeId, EmptyGuid, PrivacyNoticeApprovalState)
-        else
-            if PrivacyNoticeApprovalState <> "Privacy Notice Approval State"::Disagreed then // We do not store rejected user approvals
+        if this.CanCurrentUserApproveForOrganization() then begin
+            if PrivacyNoticeApprovalState = "Privacy Notice Approval State"::Disagreed then begin
+                PrivacyNoticeApprovalState := "Privacy Notice Approval State"::DisagreedAdmin;
+            end;
+            PrivacyNoticeApproval.SetApprovalState(PrivacyNoticeId, this.EmptyGuid, PrivacyNoticeApprovalState);
+        end else begin
+            if not PrivacyNotice.IsApprovalStateDisagreed(PrivacyNoticeApprovalState) then begin // We do not store rejected user approvals
                 PrivacyNoticeApproval.SetApprovalState(PrivacyNoticeId, UserSecurityId(), PrivacyNoticeApprovalState);
+            end;
+        end;
     end;
 
     procedure ShowOneTimePrivacyNotice(IntegrationName: Text[250]): Enum "Privacy Notice Approval State"
@@ -310,5 +326,27 @@ codeunit 1565 "Privacy Notice Impl."
     begin
         PrivacyNoticeId := CopyStr(PrivacyNoticeIntegrationName, 1, 50);
         PrivacyNoticeApprovalState := CheckPrivacyNoticeApprovalState(PrivacyNoticeId).AsInteger();
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"System Action Triggers", CreatePrivacyNotice, '', false, false)]
+    local procedure OnCreatePrivacyNotice(PrivacyNoticeIntegrationName: Text; ApproveByDefault: Boolean; var PrivacyNoticeApprovalState: Integer)
+    var
+        PrivacyNoticeId: Code[50];
+        PrivacyNotice: Record "Privacy Notice";
+    begin
+        PrivacyNoticeId := CopyStr(PrivacyNoticeIntegrationName, 1, 50);
+
+        if PrivacyNotice.Get(PrivacyNoticeId) then begin
+            PrivacyNoticeApprovalState := CheckPrivacyNoticeApprovalState(PrivacyNoticeId).AsInteger();
+        end else begin
+            CreatePrivacyNotice(PrivacyNoticeId, PrivacyNoticeIntegrationName);
+
+            if PrivacyNotice.Get(PrivacyNoticeId) then begin
+                PrivacyNotice.ApprovedByDefault := ApproveByDefault;
+                PrivacyNotice.Modify();
+            end;
+
+            PrivacyNoticeApprovalState := this.CheckPrivacyNoticeApprovalState(PrivacyNoticeId).AsInteger();
+        end;
     end;
 }
